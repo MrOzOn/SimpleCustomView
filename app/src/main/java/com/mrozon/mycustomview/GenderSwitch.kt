@@ -1,5 +1,6 @@
 package com.mrozon.mycustomview
 
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
@@ -56,6 +57,10 @@ class GenderSwitch(context: Context?, attrs: AttributeSet?) : View(context, attr
     private var bitmapFemale:Bitmap? = null
     private var sizeBitmap = 0
 
+    private var maleXPosition: Float = 0f
+    private var femaleXPosition: Float = 0f
+    private var currentXPosition: Float = 0f
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         Timber.d("onMeasure")
 
@@ -64,9 +69,14 @@ class GenderSwitch(context: Context?, attrs: AttributeSet?) : View(context, attr
         sizeBitmap = minOf(heightSize, widthSize.toInt())
         bitmapMale = getBitmapFromVectorDrawable(context, R.drawable.ic_male_avatar,
             sizeBitmap)
-//        bitmapFemale?.reconfigure(100,100,Bitmap.Config.ARGB_8888)
         bitmapFemale = getBitmapFromVectorDrawable(context, R.drawable.ic_female_avatar,
             sizeBitmap)
+        maleXPosition = sizeBitmap.toFloat()+paddingStart+paddingEnd
+        femaleXPosition = MeasureSpec.getSize(widthMeasureSpec) - maleXPosition
+        if(mIsMale)
+            currentXPosition = 0f//femaleXPosition
+        else
+            currentXPosition = maleXPosition
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 
@@ -81,32 +91,17 @@ class GenderSwitch(context: Context?, attrs: AttributeSet?) : View(context, attr
 
         val top = (height - sizeBitmap)/2F
         val widthCheckedArea = width-(sizeBitmap+paddingStart+paddingEnd*1F)
-        val widthUncheckedArea = width - widthCheckedArea
-
 
         canvas.apply {
-            drawRect(0F, 0F, width.toFloat(), height.toFloat(), paintUnchecked)
+            drawRect(0f,0f,width.toFloat(), height.toFloat(), paintUnchecked)
+            drawBitmap(bitmapMale!!,(paddingStart+paddingEnd)/2f,top,paintInactive)
+            drawBitmap(bitmapFemale!!,widthCheckedArea + (paddingStart+paddingEnd)/2F,top,paintInactive)
+            drawRect(currentXPosition, 0f, currentXPosition+widthCheckedArea, height.toFloat(), paintChecked)
 
-            if(mIsMale){
-                drawRect(0F,
-                    0F,
-                    widthCheckedArea,
-                    height.toFloat(),
-                    paintChecked)
-                drawBitmap(bitmapMale!!,(widthCheckedArea-bitmapMale?.width!!)/2,top,paintActive)
-                drawBitmap(bitmapFemale!!,widthCheckedArea + (widthUncheckedArea - bitmapFemale?.width!!)/2F,top,paintInactive)
-            }
-            else
-            {
-                drawRect(widthUncheckedArea,
-                    0F,
-                    width.toFloat(),
-                    height.toFloat(),
-                    paintChecked)
-                drawBitmap(bitmapMale!!,(widthUncheckedArea-bitmapMale?.width!!)/2,top,paintInactive)
-                drawBitmap(bitmapFemale!!,widthUncheckedArea + (widthCheckedArea - bitmapFemale?.width!!)/2F,top,paintActive)
-
-            }
+            var bitmap = bitmapMale!!
+            if(!mIsMale)
+                bitmap = bitmapFemale!!
+            drawBitmap(bitmap,currentXPosition + (widthCheckedArea-sizeBitmap)/2,top,paintActive)
         }
     }
 
@@ -127,11 +122,6 @@ class GenderSwitch(context: Context?, attrs: AttributeSet?) : View(context, attr
         return bitmap
     }
 
-    private fun dip2px(dpValue: Float): Int {
-        val scale = context.resources.displayMetrics.density
-        return (dpValue * scale + 0.5f).toInt()
-    }
-
     private val myListener =  object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent): Boolean {
             Timber.d("onDown: $e")
@@ -144,12 +134,27 @@ class GenderSwitch(context: Context?, attrs: AttributeSet?) : View(context, attr
         return detector.onTouchEvent(event).let { result ->
             if (!result) {
                 if (event?.action == MotionEvent.ACTION_UP) {
-                    Timber.d("ACTION_UP: $event")
+//                    Timber.d("ACTION_UP: $event")
                     mIsMale = !mIsMale
-                    invalidate()
+                    var startValueAnimator = maleXPosition
+                    var endValueAnimator = 0f
+                    if(!mIsMale){
+                        startValueAnimator = 0f
+                        endValueAnimator = maleXPosition
+                    }
+                    val valueAnimator = ValueAnimator.ofFloat(startValueAnimator, endValueAnimator).apply {
+//                        duration = 1000
+                        addUpdateListener {
+                            currentXPosition = it.animatedValue as Float
+//                            Timber.d("animatedValue=${it.animatedValue}")
+                            invalidate()
+                        }
+                    }
+                    valueAnimator.start()
                     true
                 } else false
             } else true
         }
     }
+
 }
